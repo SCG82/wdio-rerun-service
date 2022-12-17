@@ -1,12 +1,21 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
+import minimist from 'minimist'
+import { readFileSync, rmSync } from 'node:fs'
+import { argv, cwd } from 'node:process'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import RerunService from '../src'
 import { gherkinDocument, pickle } from './fixtures/cucumber'
 
 describe('wdio-rerun-service', () => {
-    const nonPassingItems = [
-        { name: '1', location: 'feature/sample.feature:1' },
-        { name: '2', location: 'feature/sample.feature:4' },
+    const nonPassingItemsCucumber = [
+        { location: 'feature/sample.feature:1', failure: 'some error' },
+        { location: 'feature/sample.feature:4', failure: 'another error' },
+    ]
+    const nonPassingItemsMocha = [
+        { location: 'tests/sample1.test.ts', failure: 'some error' },
+        { location: 'tests/sample2.test.ts', failure: 'another error' },
     ]
     const capabilities = { browser: 'chrome' }
     const specFile = ['features/sample.feature']
@@ -31,8 +40,10 @@ describe('wdio-rerun-service', () => {
             const service = new RerunService()
             expect(() => service.before(capabilities, specFile)).not.toThrow()
             expect(service.ignoredTags).toEqual([])
-            expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunDataDir).toEqual(
+                join(cwd(), 'results', 'rerun'),
+            )
+            expect(service.rerunScriptPath).toEqual(join(cwd(), 'rerun.sh'))
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('')
         })
@@ -48,8 +59,10 @@ describe('wdio-rerun-service', () => {
                 service.before({}, ['features/sample.feature']),
             ).not.toThrow()
             expect(service.ignoredTags).toEqual(['@ignored'])
-            expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunDataDir).toEqual(
+                join(cwd(), 'results', 'rerun'),
+            )
+            expect(service.rerunScriptPath).toEqual(join(cwd(), 'rerun.sh'))
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('')
         })
@@ -65,7 +78,7 @@ describe('wdio-rerun-service', () => {
             expect(service.rerunDataDir).toEqual(
                 './results/custom_rerun_directory',
             )
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunScriptPath).toEqual(join(cwd(), 'rerun.sh'))
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('')
         })
@@ -78,7 +91,9 @@ describe('wdio-rerun-service', () => {
                 service.before({}, ['features/sample.feature']),
             ).not.toThrow()
             expect(service.ignoredTags).toEqual([])
-            expect(service.rerunDataDir).toEqual('./results/rerun')
+            expect(service.rerunDataDir).toEqual(
+                join(cwd(), 'results', 'rerun'),
+            )
             expect(service.rerunScriptPath).toEqual('./custom_rerun_script.sh')
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('')
@@ -92,8 +107,10 @@ describe('wdio-rerun-service', () => {
                 service.before({}, ['features/sample.feature']),
             ).not.toThrow()
             expect(service.ignoredTags).toEqual([])
-            expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunDataDir).toEqual(
+                join(cwd(), 'results', 'rerun'),
+            )
+            expect(service.rerunScriptPath).toEqual(join(cwd(), 'rerun.sh'))
             expect(service.commandPrefix).toEqual('CUSTOM_VAR=true')
             expect(service.customParameters).toEqual('')
         })
@@ -104,8 +121,10 @@ describe('wdio-rerun-service', () => {
                 service.before({}, ['features/sample.feature']),
             ).not.toThrow()
             expect(service.ignoredTags).toEqual([])
-            expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunDataDir).toEqual(
+                join(cwd(), 'results', 'rerun'),
+            )
+            expect(service.rerunScriptPath).toEqual(join(cwd(), 'rerun.sh'))
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('--foobar')
         })
@@ -292,7 +311,7 @@ describe('wdio-rerun-service', () => {
     describe('after', () => {
         it('after should not throw an exception when no parameters are given', () => {
             const service = new RerunService()
-            service.nonPassingItems = nonPassingItems
+            service.nonPassingItems = nonPassingItemsCucumber
             service.serviceWorkerId = '123'
             expect(() => service.before(capabilities, specFile)).not.toThrow()
             expect(() => service.after()).not.toThrow()
@@ -304,13 +323,13 @@ describe('wdio-rerun-service', () => {
             const service = new RerunService({
                 commandPrefix: 'CUSTOM_VAR=true',
             })
-            service.nonPassingItems = nonPassingItems
+            service.nonPassingItems = nonPassingItemsCucumber
             expect(() => service.onComplete()).not.toThrow()
         })
 
         it('should throw an exception when no parameters are given with additional params', () => {
             const service = new RerunService({ customParameters: '--foobar' })
-            service.nonPassingItems = nonPassingItems
+            service.nonPassingItems = nonPassingItemsMocha
             expect(() => service.onComplete()).not.toThrow()
         })
 
@@ -318,6 +337,23 @@ describe('wdio-rerun-service', () => {
             const service = new RerunService()
             service.serviceWorkerId = '123'
             expect(() => service.after()).not.toThrow()
+        })
+
+        it('should add failed specs to rerun script', () => {
+            const rerunDataDir = join(tmpdir(), 'rerun-data')
+            const rerunScriptPath = join(rerunDataDir, 'rerun.sh')
+            const service = new RerunService({ rerunDataDir, rerunScriptPath })
+            service.before({}, [])
+            service.nonPassingItems = nonPassingItemsMocha
+            service.after()
+            service.onComplete()
+            const rerunScript = readFileSync(rerunScriptPath, 'utf8')
+            const parsedArgs = minimist(argv.slice(2))
+            const args = parsedArgs._[0] ?? ''
+            expect(rerunScript).toBe(
+                `DISABLE_RERUN=true node_modules/.bin/wdio ${args} --spec=tests/sample1.test.ts --spec=tests/sample2.test.ts`,
+            )
+            rmSync(rerunDataDir, { recursive: true, force: true })
         })
     })
 })
