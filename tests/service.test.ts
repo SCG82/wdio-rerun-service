@@ -3,7 +3,7 @@ import { describe, expect, it } from '@jest/globals'
 import minimist from 'minimist'
 import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { argv } from 'node:process'
+import { argv, platform } from 'node:process'
 import { join } from 'path'
 import RerunService from '../src'
 import { gherkinDocument, pickle } from './fixtures/cucumber'
@@ -35,6 +35,8 @@ describe('wdio-rerun-service', () => {
     const cucumberBrowser = { config: { framework: 'cucumber' } }
     const mochaBrowser = { config: { framework: 'mocha' } }
 
+    const rerunScriptFile = platform === 'win32' ? 'rerun.bat' : 'rerun.sh'
+
     describe('setup', () => {
         it('should not throw error when setup with no parameters', async () => {
             const service = new RerunService()
@@ -43,7 +45,7 @@ describe('wdio-rerun-service', () => {
             ).resolves.toBeUndefined()
             expect(service.ignoredTags).toEqual([])
             expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunScriptPath).toEqual(rerunScriptFile)
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('')
         })
@@ -62,7 +64,7 @@ describe('wdio-rerun-service', () => {
             ).resolves.toBeUndefined()
             expect(service.ignoredTags).toEqual(['@ignored'])
             expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunScriptPath).toEqual(rerunScriptFile)
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('')
         })
@@ -78,7 +80,7 @@ describe('wdio-rerun-service', () => {
             expect(service.rerunDataDir).toEqual(
                 './results/custom_rerun_directory',
             )
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunScriptPath).toEqual(rerunScriptFile)
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('')
         })
@@ -106,7 +108,7 @@ describe('wdio-rerun-service', () => {
             ).resolves.toBeUndefined()
             expect(service.ignoredTags).toEqual([])
             expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunScriptPath).toEqual(rerunScriptFile)
             expect(service.commandPrefix).toEqual('CUSTOM_VAR=true')
             expect(service.customParameters).toEqual('')
         })
@@ -118,7 +120,7 @@ describe('wdio-rerun-service', () => {
             ).resolves.toBeUndefined()
             expect(service.ignoredTags).toEqual([])
             expect(service.rerunDataDir).toEqual('./results/rerun')
-            expect(service.rerunScriptPath).toEqual('./rerun.sh')
+            expect(service.rerunScriptPath).toEqual(rerunScriptFile)
             expect(service.commandPrefix).toEqual('')
             expect(service.customParameters).toEqual('--foobar')
         })
@@ -314,17 +316,23 @@ describe('wdio-rerun-service', () => {
 
         it('should add failed specs to rerun script', async () => {
             const rerunDataDir = join(tmpdir(), 'rerun-data')
-            const rerunScriptPath = join(rerunDataDir, 'rerun.sh')
+            const rerunScriptFile =
+                platform === 'win32' ? 'rerun.bat' : 'rerun.sh'
+            const rerunScriptPath = join(rerunDataDir, rerunScriptFile)
             const service = new RerunService({ rerunDataDir, rerunScriptPath })
             await service.before({}, [])
             service.nonPassingItems = nonPassingItemsMocha
             await service.after()
             await service.onComplete()
+            const disableRerun =
+                platform === 'win32'
+                    ? 'set DISABLE_RERUN=true &&'
+                    : 'DISABLE_RERUN=true'
             const rerunScript = await readFile(rerunScriptPath, 'utf8')
             const parsedArgs = minimist(argv.slice(2))
             const args = parsedArgs._[0] ?? ''
             expect(rerunScript).toBe(
-                `DISABLE_RERUN=true node_modules/.bin/wdio ${args} --spec=tests/sample1.test.ts --spec=tests/sample2.test.ts`,
+                `${disableRerun} npx wdio ${args} --spec=tests/sample1.test.ts --spec=tests/sample2.test.ts`,
             )
             await rm(rerunDataDir, { recursive: true, force: true })
         })
