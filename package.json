@@ -80,7 +80,6 @@
   "devDependencies": {
     "@jest/globals": "^29.3.1",
     "@tsconfig/node16": "^1.0.3",
-    "@tsconfig/node18": "^1.0.1",
     "@tsconfig/node18-strictest-esm": "^1.0.1",
     "@types/minimist": "^1.2.2",
     "@types/node": "^18.11.16",
