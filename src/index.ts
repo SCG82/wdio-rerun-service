@@ -3,7 +3,7 @@ import type { Testrunner } from '@wdio/types/build/Options'
 import minimist from 'minimist'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { argv, cwd } from 'node:process'
+import { argv } from 'node:process'
 import { v5 as uuidv5 } from 'uuid'
 
 type AfterScenario = NonNullable<
@@ -46,8 +46,8 @@ export default class RerunService implements Services.ServiceInstance {
         this.nonPassingItems = []
         this.serviceWorkerId = ''
         this.ignoredTags = ignoredTags ?? []
-        this.rerunDataDir = rerunDataDir ?? join(cwd(), 'results', 'rerun')
-        this.rerunScriptPath = rerunScriptPath ?? join(cwd(), 'rerun.sh')
+        this.rerunDataDir = rerunDataDir ?? './results/rerun'
+        this.rerunScriptPath = rerunScriptPath ?? './rerun.sh'
         this.commandPrefix = commandPrefix ?? ''
         this.customParameters = customParameters ?? ''
         this.specFile = ''
