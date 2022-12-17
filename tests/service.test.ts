@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
+import { describe, expect, it } from '@jest/globals'
 import minimist from 'minimist'
 import { readFileSync, rmSync } from 'node:fs'
 import { argv } from 'node:process'
@@ -147,74 +147,51 @@ describe('wdio-rerun-service', () => {
             expect(() => service.afterScenario(world as any)).not.toThrow()
         })
 
-        describe('should add to nonPassingItems if status is', () => {
-            let service: RerunService
-            let testWorld = { ...world, result: { status: 'UNKNOWN' } }
-            beforeEach(() => {
-                service = new RerunService()
+        for (const status of ['PENDING', 'UNDEFINED', 'AMBIGUOUS', 'FAILED']) {
+            it('should add to nonPassingItems if status is ' + status, () => {
+                const service = new RerunService()
                 // @ts-expect-error - mock browser object
                 global.browser = cucumberBrowser
-            })
-            it('PENDING', () => {
-                testWorld = { ...world, result: { status: 'PENDING' } }
-            })
-            it('UNDEFINED', () => {
-                testWorld = { ...world, result: { status: 'UNDEFINED' } }
-            })
-            it('AMBIGUOUS', () => {
-                testWorld = { ...world, result: { status: 'AMBIGUOUS' } }
-            })
-            it('FAILED', () => {
-                testWorld = { ...world, result: { status: 'FAILED' } }
-            })
-            afterEach(() => {
+                const testWorld = { ...world, result: { status } }
                 service.afterScenario(testWorld as any)
                 expect(service.nonPassingItems.length).toBeGreaterThan(0)
             })
+        }
+
+        for (const status of ['PASSED', 'SKIPPED']) {
+            it(
+                'should not add to nonPassingItems if status is ' + status,
+                () => {
+                    const service = new RerunService()
+                    // @ts-expect-error - mock browser object
+                    global.browser = cucumberBrowser
+                    const testWorld = { ...world, result: { status } }
+                    service.afterScenario(testWorld as any)
+                    expect(service.nonPassingItems).toEqual([])
+                },
+            )
+        }
+
+        it('should add to nonPassingItems if tag is not ignored', () => {
+            const service = new RerunService({
+                ignoredTags: ['@scenario-tag6'],
+            })
+            // @ts-expect-error - mock browser object
+            global.browser = cucumberBrowser
+            const testWorld = { ...world, result: { status: 'FAILED' } }
+            service.afterScenario(testWorld as any)
+            expect(service.nonPassingItems.length).toBeGreaterThan(0)
         })
 
-        describe('should not add to nonPassingItems if status is', () => {
-            let service: RerunService
-            let testWorld = { ...world, result: { status: 'UNKNOWN' } }
-            beforeEach(() => {
-                service = new RerunService()
-                // @ts-expect-error - mock browser object
-                global.browser = cucumberBrowser
+        it('should not add to nonPassingItems if tag is ignored', () => {
+            const service = new RerunService({
+                ignoredTags: ['@scenario-tag1'],
             })
-            it('PASSED', () => {
-                testWorld = { ...world, result: { status: 'PASSED' } }
-            })
-            it('SKIPPED', () => {
-                testWorld = { ...world, result: { status: 'SKIPPED' } }
-            })
-            afterEach(() => {
-                service.afterScenario(testWorld as any)
-                expect(service.nonPassingItems).toEqual([])
-            })
-        })
-
-        describe('ignored tags', () => {
-            it('should not add to nonPassingItems if tag is ignored', () => {
-                const service = new RerunService({
-                    ignoredTags: ['@scenario-tag1'],
-                })
-                // @ts-expect-error - mock browser object
-                global.browser = cucumberBrowser
-                const testWorld = { ...world, result: { status: 'FAILED' } }
-                service.afterScenario(testWorld as any)
-                expect(service.nonPassingItems).toEqual([])
-            })
-
-            it('should add to nonPassingItems if tag is not ignored', () => {
-                const service = new RerunService({
-                    ignoredTags: ['@scenario-tag6'],
-                })
-                // @ts-expect-error - mock browser object
-                global.browser = cucumberBrowser
-                const testWorld = { ...world, result: { status: 'FAILED' } }
-                service.afterScenario(testWorld as any)
-                expect(service.nonPassingItems.length).toBeGreaterThan(0)
-            })
+            // @ts-expect-error - mock browser object
+            global.browser = cucumberBrowser
+            const testWorld = { ...world, result: { status: 'FAILED' } }
+            service.afterScenario(testWorld as any)
+            expect(service.nonPassingItems).toEqual([])
         })
     })
 
