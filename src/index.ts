@@ -46,8 +46,8 @@ export default class RerunService implements Services.ServiceInstance {
         this.nonPassingItems = []
         this.serviceWorkerId = ''
         this.ignoredTags = ignoredTags ?? []
-        this.rerunDataDir = rerunDataDir ?? './results/rerun'
-        this.rerunScriptPath = rerunScriptPath ?? './rerun.sh'
+        this.rerunDataDir = rerunDataDir ?? join(cwd(), 'results', 'rerun')
+        this.rerunScriptPath = rerunScriptPath ?? join(cwd(), 'rerun.sh')
         this.commandPrefix = commandPrefix ?? ''
         this.customParameters = customParameters ?? ''
         this.specFile = ''
@@ -141,30 +141,31 @@ export default class RerunService implements Services.ServiceInstance {
             return // console.log('Re-run service did not detect any non-passing scenarios or tests.');
         }
         await writeFile(
-            `${this.rerunDataDir}/rerun-${this.serviceWorkerId}.json`,
+            join(this.rerunDataDir, `rerun-${this.serviceWorkerId}.json`),
             JSON.stringify(this.nonPassingItems),
         )
     }
 
     async onComplete() {
         try {
-            const directoryPath = join(cwd(), `${this.rerunDataDir}`)
-            const rerunFiles = await readdir(directoryPath)
+            const files = await readdir(this.rerunDataDir)
+            const rerunFiles = files.filter((file) => file.endsWith('.json'))
             if (rerunFiles.length === 0) {
                 return
             }
-            const parsedArgs = minimist(argv.slice(2))
-            const args = parsedArgs._[0] ?? ''
-            let rerunCommand = `${this.commandPrefix} DISABLE_RERUN=true node_modules/.bin/wdio ${args} ${this.customParameters} `
             const failureLocations = new Set<string>()
             for (const file of rerunFiles) {
                 const json: NonPassingItem[] = JSON.parse(
-                    await readFile(`${this.rerunDataDir}/${file}`, 'utf8'),
+                    await readFile(join(this.rerunDataDir, file), 'utf8'),
                 )
                 json.forEach((failure) => {
                     failureLocations.add(failure.location.replace(/\\/g, '/'))
                 })
             }
+            const parsedArgs = minimist(argv.slice(2))
+            const args = parsedArgs._[0] ? parsedArgs._[0] + ' ' : ''
+            const prefix = this.commandPrefix ? this.commandPrefix + ' ' : ''
+            let rerunCommand = `${prefix}DISABLE_RERUN=true node_modules/.bin/wdio ${args}${this.customParameters}`
             failureLocations.forEach((failureLocation) => {
                 rerunCommand += ` --spec=${failureLocation}`
             })
