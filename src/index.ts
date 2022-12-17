@@ -74,18 +74,19 @@ export default class RerunService implements Services.ServiceInstance {
     ) {
         const { passed } = results
         const config = browser.config as Testrunner
+        if (passed || config.framework === 'cucumber') {
+            return
+        }
+        // console.log(`Re-run service is inspecting non-passing test.`);
+        // console.log(`Test location: ${this.specFile}`);
         const error = results.error as Error | undefined
-        if (config.framework !== 'cucumber' && !passed) {
-            // console.log(`Re-run service is inspecting non-passing test.`);
-            // console.log(`Test location: ${this.specFile}`);
-            if (error?.message) {
-                this.nonPassingItems.push({
-                    location: this.specFile,
-                    failure: error.message,
-                })
-            } else {
-                // console.log("The non-passing test did not contain any error message, it could not be added for re-run.")
-            }
+        if (error?.message) {
+            this.nonPassingItems.push({
+                location: this.specFile,
+                failure: error.message,
+            })
+        } else {
+            // console.log("The non-passing test did not contain any error message, it could not be added for re-run.")
         }
     }
 
@@ -105,77 +106,70 @@ export default class RerunService implements Services.ServiceInstance {
             typeof world.result?.status === 'number'
                 ? CUCUMBER_STATUS_MAP[world.result.status]
                 : world.result?.status
-        const scenarioLineNumber =
-            world.gherkinDocument.feature?.children.filter((child) => {
-                if (child.scenario) {
-                    return world.pickle.astNodeIds.includes(
-                        child.scenario.id.toString(),
-                    )
-                }
-                return false
-            })?.[0]?.scenario?.location.line
         if (
-            config.framework === 'cucumber' &&
-            status !== 'PASSED' &&
-            status !== 'SKIPPED'
+            config.framework !== 'cucumber' ||
+            status === 'PASSED' ||
+            status === 'SKIPPED'
         ) {
-            const scenarioLocation = `${world.pickle.uri}:${
-                scenarioLineNumber ?? 0
-            }`
-            const tagsList = world.pickle.tags.map((tag) => tag.name)
-            if (
-                this.ignoredTags.length &&
-                !tagsList.some((ignoredTag) =>
-                    this.ignoredTags.includes(ignoredTag),
-                )
-            ) {
-                this.nonPassingItems.push({
-                    location: scenarioLocation,
-                    failure: world.result?.message,
-                })
-            }
+            return
+        }
+        const scenarioLineNumber =
+            world.gherkinDocument.feature?.children.filter((child) =>
+                child.scenario
+                    ? world.pickle.astNodeIds.includes(
+                          child.scenario.id.toString(),
+                      )
+                    : false,
+            )?.[0]?.scenario?.location.line ?? 0
+        const scenarioLocation = `${world.pickle.uri}:${scenarioLineNumber}`
+        const tagsList = world.pickle.tags.map((tag) => tag.name)
+        if (
+            !Array.isArray(this.ignoredTags) ||
+            !tagsList.some((ignoredTag) =>
+                this.ignoredTags.includes(ignoredTag),
+            )
+        ) {
+            this.nonPassingItems.push({
+                location: scenarioLocation,
+                failure: world.result?.message,
+            })
         }
     }
 
     async after() {
-        if (this.nonPassingItems.length > 0) {
-            await writeFile(
-                `${this.rerunDataDir}/rerun-${this.serviceWorkerId}.json`,
-                JSON.stringify(this.nonPassingItems),
-            )
-        } else {
-            // console.log('Re-run service did not detect any non-passing scenarios or tests.');
+        if (this.nonPassingItems.length === 0) {
+            return // console.log('Re-run service did not detect any non-passing scenarios or tests.');
         }
+        await writeFile(
+            `${this.rerunDataDir}/rerun-${this.serviceWorkerId}.json`,
+            JSON.stringify(this.nonPassingItems),
+        )
     }
 
     async onComplete() {
         try {
             const directoryPath = join(cwd(), `${this.rerunDataDir}`)
             const rerunFiles = await readdir(directoryPath)
-            if (rerunFiles.length > 0) {
-                const parsedArgs = minimist(argv.slice(2))
-                const args = parsedArgs._[0] ?? ''
-                let rerunCommand = `${this.commandPrefix} DISABLE_RERUN=true node_modules/.bin/wdio ${args} ${this.customParameters} `
-                const failureLocations: string[] = []
-                for (const file of rerunFiles) {
-                    const json: NonPassingItem[] = JSON.parse(
-                        await readFile(`${this.rerunDataDir}/${file}`, 'utf8'),
-                    )
-                    json.forEach((failure) => {
-                        failureLocations.push(
-                            failure.location.replace(/\\/g, '/'),
-                        )
-                    })
-                }
-                const failureLocationsUnique = Array.from(
-                    new Set(failureLocations),
-                )
-                failureLocationsUnique.forEach((failureLocation) => {
-                    rerunCommand += ` --spec=${failureLocation}`
-                })
-                await writeFile(this.rerunScriptPath, rerunCommand)
-                // console.log(`Re-run script has been generated @ ${this.rerunScriptPath}`);
+            if (rerunFiles.length === 0) {
+                return
             }
+            const parsedArgs = minimist(argv.slice(2))
+            const args = parsedArgs._[0] ?? ''
+            let rerunCommand = `${this.commandPrefix} DISABLE_RERUN=true node_modules/.bin/wdio ${args} ${this.customParameters} `
+            const failureLocations = new Set<string>()
+            for (const file of rerunFiles) {
+                const json: NonPassingItem[] = JSON.parse(
+                    await readFile(`${this.rerunDataDir}/${file}`, 'utf8'),
+                )
+                json.forEach((failure) => {
+                    failureLocations.add(failure.location.replace(/\\/g, '/'))
+                })
+            }
+            failureLocations.forEach((failureLocation) => {
+                rerunCommand += ` --spec=${failureLocation}`
+            })
+            await writeFile(this.rerunScriptPath, rerunCommand)
+            // console.log(`Re-run script has been generated @ ${this.rerunScriptPath}`);
         } catch (err) {
             // console.log(`Re-run service failed to generate re-run script: ${err}`);
         }
