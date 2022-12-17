@@ -1,0 +1,18 @@
+{
+    "extends": "@tsconfig/node18/tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "allowJs": true,
+        "resolveJsonModule": true,
+        "removeComments": false,
+        "strictFunctionTypes": false,
+        "experimentalDecorators": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "moduleDetection": "force",
+        "module": "esnext",
+        "lib": ["dom", "es2021"],
+        "types": ["node", "@wdio/globals/types", "@wdio/cucumber-framework"]
+    },
+    "exclude": ["node_modules", "build"]
+}
