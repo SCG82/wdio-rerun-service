@@ -8,10 +8,9 @@ import {
     readFileSync,
     writeFileSync,
 } from 'node:fs'
-import path from 'node:path'
+import { join } from 'node:path'
+import { argv, cwd } from 'node:process'
 import { v5 as uuidv5 } from 'uuid'
-
-const argv = minimist(process.argv.slice(2))
 
 type AfterScenario = NonNullable<
     WebdriverIO.HookFunctionExtension['afterScenario']
@@ -61,7 +60,7 @@ export default class RerunService implements Services.ServiceInstance {
     }
 
     before(_capabilities: Capabilities.RemoteCapability, specs: string[]) {
-        this.specFile = specs[0]
+        this.specFile = specs[0] ?? ''
         // console.log(`Re-run service is activated. Data directory: ${this.rerunDataDir}`);
         mkdirSync(this.rerunDataDir, { recursive: true })
         // INFO: `namespace` below copied from: https://github.com/kelektiv/node-uuid/blob/master//lib/v35.js#L54:16
@@ -116,6 +115,7 @@ export default class RerunService implements Services.ServiceInstance {
                         child.scenario.id.toString(),
                     )
                 }
+                return false
             })?.[0]?.scenario?.location.line
         if (
             config.framework === 'cucumber' &&
@@ -152,11 +152,13 @@ export default class RerunService implements Services.ServiceInstance {
     }
 
     onComplete() {
-        const directoryPath = path.join(process.cwd(), `${this.rerunDataDir}`)
+        const directoryPath = join(cwd(), `${this.rerunDataDir}`)
         if (existsSync(directoryPath)) {
             const rerunFiles = readdirSync(directoryPath)
             if (rerunFiles.length > 0) {
-                let rerunCommand = `${this.commandPrefix} DISABLE_RERUN=true node_modules/.bin/wdio ${argv._[0]} ${this.customParameters} `
+                const parsedArgs = minimist(argv.slice(2))
+                const args = parsedArgs._[0] ?? ''
+                let rerunCommand = `${this.commandPrefix} DISABLE_RERUN=true node_modules/.bin/wdio ${args} ${this.customParameters} `
                 const failureLocations: string[] = []
                 rerunFiles.forEach((file) => {
                     const json: NonPassingItem[] = JSON.parse(
