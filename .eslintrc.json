@@ -4,11 +4,6 @@
         "node": true,
         "es2021": true
     },
-    "globals": {
-        "WebdriverIO": true,
-        "WebDriver": true,
-        "NodeJS": true
-    },
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
         "ecmaVersion": 2021,
