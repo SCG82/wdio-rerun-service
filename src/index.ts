@@ -1,13 +1,7 @@
 import type { Capabilities, Frameworks, Services } from '@wdio/types'
 import type { Testrunner } from '@wdio/types/build/Options'
 import minimist from 'minimist'
-import {
-    existsSync,
-    mkdirSync,
-    readdirSync,
-    readFileSync,
-    writeFileSync,
-} from 'node:fs'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { argv, cwd } from 'node:process'
 import { v5 as uuidv5 } from 'uuid'
@@ -59,10 +53,13 @@ export default class RerunService implements Services.ServiceInstance {
         this.specFile = ''
     }
 
-    before(_capabilities: Capabilities.RemoteCapability, specs: string[]) {
+    async before(
+        _capabilities: Capabilities.RemoteCapability,
+        specs: string[],
+    ) {
         this.specFile = specs[0] ?? ''
         // console.log(`Re-run service is activated. Data directory: ${this.rerunDataDir}`);
-        mkdirSync(this.rerunDataDir, { recursive: true })
+        await mkdir(this.rerunDataDir, { recursive: true })
         // INFO: `namespace` below copied from: https://github.com/kelektiv/node-uuid/blob/master//lib/v35.js#L54:16
         this.serviceWorkerId = uuidv5(
             `${Date.now()}`,
@@ -140,9 +137,9 @@ export default class RerunService implements Services.ServiceInstance {
         }
     }
 
-    after() {
+    async after() {
         if (this.nonPassingItems.length > 0) {
-            writeFileSync(
+            await writeFile(
                 `${this.rerunDataDir}/rerun-${this.serviceWorkerId}.json`,
                 JSON.stringify(this.nonPassingItems),
             )
@@ -151,34 +148,36 @@ export default class RerunService implements Services.ServiceInstance {
         }
     }
 
-    onComplete() {
-        const directoryPath = join(cwd(), `${this.rerunDataDir}`)
-        if (existsSync(directoryPath)) {
-            const rerunFiles = readdirSync(directoryPath)
+    async onComplete() {
+        try {
+            const directoryPath = join(cwd(), `${this.rerunDataDir}`)
+            const rerunFiles = await readdir(directoryPath)
             if (rerunFiles.length > 0) {
                 const parsedArgs = minimist(argv.slice(2))
                 const args = parsedArgs._[0] ?? ''
                 let rerunCommand = `${this.commandPrefix} DISABLE_RERUN=true node_modules/.bin/wdio ${args} ${this.customParameters} `
                 const failureLocations: string[] = []
-                rerunFiles.forEach((file) => {
+                for (const file of rerunFiles) {
                     const json: NonPassingItem[] = JSON.parse(
-                        readFileSync(`${this.rerunDataDir}/${file}`, 'utf8'),
+                        await readFile(`${this.rerunDataDir}/${file}`, 'utf8'),
                     )
                     json.forEach((failure) => {
                         failureLocations.push(
                             failure.location.replace(/\\/g, '/'),
                         )
                     })
-                })
+                }
                 const failureLocationsUnique = Array.from(
                     new Set(failureLocations),
                 )
                 failureLocationsUnique.forEach((failureLocation) => {
                     rerunCommand += ` --spec=${failureLocation}`
                 })
-                writeFileSync(this.rerunScriptPath, rerunCommand)
+                await writeFile(this.rerunScriptPath, rerunCommand)
                 // console.log(`Re-run script has been generated @ ${this.rerunScriptPath}`);
             }
+        } catch (err) {
+            // console.log(`Re-run service failed to generate re-run script: ${err}`);
         }
     }
 }

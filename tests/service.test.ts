@@ -41,9 +41,11 @@ describe('wdio-rerurn-service', () => {
     const cucumberBrowser = { config: { framework: 'cucumber' } }
     const mochaBrowser = { config: { framework: 'mocha' } }
 
-    it('should not throw error when setup with no parameters', () => {
+    it('should not throw error when setup with no parameters', async () => {
         const service = new RerunService()
-        expect(() => service.before(capabilities, specFile)).not.toThrow()
+        await expect(service.before(capabilities, specFile)).resolves.toBe(
+            undefined,
+        )
         expect(service.ignoredTags).toEqual([])
         expect(service.rerunDataDir).toEqual('./results/rerun')
         expect(service.rerunScriptPath).toEqual('./rerun.sh')
@@ -51,16 +53,17 @@ describe('wdio-rerurn-service', () => {
         expect(service.customParameters).toEqual('')
     })
 
-    it('should throw error when setup bad rereunDataDir', () => {
+    it('should throw error when setup bad rereunDataDir', async () => {
         const service = new RerunService({ rerunDataDir: '\0' })
-        expect(() => service.before(capabilities, specFile)).toThrow()
+        // eslint-disable-next-line @typescript-eslint/await-thenable
+        await expect(service.before(capabilities, specFile)).rejects.toThrow()
     })
 
-    it('can configure ignoredTags', () => {
+    it('can configure ignoredTags', async () => {
         const service = new RerunService({ ignoredTags: ['@ignored'] })
-        expect(() =>
+        await expect(
             service.before({}, ['features/sample.feature']),
-        ).not.toThrow()
+        ).resolves.toBeUndefined()
         expect(service.ignoredTags).toEqual(['@ignored'])
         expect(service.rerunDataDir).toEqual('./results/rerun')
         expect(service.rerunScriptPath).toEqual('./rerun.sh')
@@ -68,13 +71,13 @@ describe('wdio-rerurn-service', () => {
         expect(service.customParameters).toEqual('')
     })
 
-    it('can configure rerunDataDir', () => {
+    it('can configure rerunDataDir', async () => {
         const service = new RerunService({
             rerunDataDir: './results/custom_rerun_directory',
         })
-        expect(() =>
+        await expect(
             service.before({}, ['features/sample.feature']),
-        ).not.toThrow()
+        ).resolves.toBeUndefined()
         expect(service.ignoredTags).toEqual([])
         expect(service.rerunDataDir).toEqual('./results/custom_rerun_directory')
         expect(service.rerunScriptPath).toEqual('./rerun.sh')
@@ -82,13 +85,13 @@ describe('wdio-rerurn-service', () => {
         expect(service.customParameters).toEqual('')
     })
 
-    it('can configure rerunScriptPath', () => {
+    it('can configure rerunScriptPath', async () => {
         const service = new RerunService({
             rerunScriptPath: './custom_rerun_script.sh',
         })
-        expect(() =>
+        await expect(
             service.before({}, ['features/sample.feature']),
-        ).not.toThrow()
+        ).resolves.toBeUndefined()
         expect(service.ignoredTags).toEqual([])
         expect(service.rerunDataDir).toEqual('./results/rerun')
         expect(service.rerunScriptPath).toEqual('./custom_rerun_script.sh')
@@ -96,11 +99,11 @@ describe('wdio-rerurn-service', () => {
         expect(service.customParameters).toEqual('')
     })
 
-    it('can configure commandPrefix', () => {
+    it('can configure commandPrefix', async () => {
         const service = new RerunService({ commandPrefix: 'CUSTOM_VAR=true' })
-        expect(() =>
+        await expect(
             service.before({}, ['features/sample.feature']),
-        ).not.toThrow()
+        ).resolves.toBeUndefined()
         expect(service.ignoredTags).toEqual([])
         expect(service.rerunDataDir).toEqual('./results/rerun')
         expect(service.rerunScriptPath).toEqual('./rerun.sh')
@@ -108,11 +111,11 @@ describe('wdio-rerurn-service', () => {
         expect(service.customParameters).toEqual('')
     })
 
-    it('can configure customParameters', () => {
+    it('can configure customParameters', async () => {
         const service = new RerunService({ customParameters: '--foobar' })
-        expect(() =>
+        await expect(
             service.before({}, ['features/sample.feature']),
-        ).not.toThrow()
+        ).resolves.toBeUndefined()
         expect(service.ignoredTags).toEqual([])
         expect(service.rerunDataDir).toEqual('./results/rerun')
         expect(service.rerunScriptPath).toEqual('./rerun.sh')
@@ -120,10 +123,10 @@ describe('wdio-rerurn-service', () => {
         expect(service.customParameters).toEqual('--foobar')
     })
 
-    it('before should throw an exception when no parameters are given', () => {
+    it('before should throw an exception when no parameters are given', async () => {
         const service = new RerunService()
         // @ts-expect-error - test invalid input
-        expect(() => service.before()).toThrow()
+        await expect(service.before()).rejects.toThrow()
     })
 
     it('afterTest should not throw an exception when parameters are given', () => {
@@ -180,34 +183,36 @@ describe('wdio-rerurn-service', () => {
         expect(() => service.afterScenario(world as any)).not.toThrow()
     })
 
-    it('after should not throw an exception when no parameters are given', () => {
+    it('after should not throw an exception when no parameters are given', async () => {
         const service = new RerunService()
         service.nonPassingItems = nonPassingItems
         service.serviceWorkerId = '123'
-        expect(() => service.before(capabilities, specFile)).not.toThrow()
-        expect(() => service.after()).not.toThrow()
+        await expect(service.before(capabilities, specFile)).resolves.toBe(
+            undefined,
+        )
+        await expect(service.after()).resolves.toBeUndefined()
     })
 
-    it('onComplete should throw an exception when no parameters are given with prefix', () => {
+    it('onComplete should throw an exception when no parameters are given with prefix', async () => {
         const service = new RerunService({ commandPrefix: 'CUSTOM_VAR=true' })
         service.nonPassingItems = nonPassingItems
-        expect(() => service.onComplete()).not.toThrow()
+        await expect(service.onComplete()).resolves.toBeUndefined()
     })
 
-    it('onComplete should throw an exception when no parameters are given with additional params', () => {
+    it('onComplete should throw an exception when no parameters are given with additional params', async () => {
         const service = new RerunService({ customParameters: '--foobar' })
         service.nonPassingItems = nonPassingItems
-        expect(() => service.onComplete()).not.toThrow()
+        await expect(service.onComplete()).resolves.toBeUndefined()
     })
 
-    it('onComplete should not throw an exception when no parameters are given and no nonPassingItems', () => {
+    it('onComplete should not throw an exception when no parameters are given and no nonPassingItems', async () => {
         const service = new RerunService()
         service.serviceWorkerId = '123'
-        expect(() => service.after()).not.toThrow()
+        await expect(service.onComplete()).resolves.toBeUndefined()
     })
 
-    it('before should not throw an exception when empty specFile parameter', () => {
+    it('before should not throw an exception when empty specFile parameter', async () => {
         const service = new RerunService()
-        expect(() => service.before({}, [])).not.toThrow()
+        await expect(service.before({}, [])).resolves.toBeUndefined()
     })
 })
