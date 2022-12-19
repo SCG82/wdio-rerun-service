@@ -53,7 +53,7 @@ export default class RerunService implements Services.ServiceInstance {
         this.specFile = ''
     }
 
-    async asyncbefore(
+    async before(
         _capabilities: Capabilities.RemoteCapability,
         specs: string[],
     ) {
